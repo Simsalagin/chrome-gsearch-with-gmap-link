@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Google Search Maps Link",
+  "version": "1.0",
+  "description": "Zeigt einen Google Maps Link über Karten in Google-Suchergebnissen an",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": ["*://*.google.com/search*", "*://*.google.de/search*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ]
+}
