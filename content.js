@@ -16,6 +16,55 @@
   }
 
   /**
+   * Extracts business name from the knowledge panel
+   */
+  function extractBusinessName(panel) {
+    // Try multiple selectors for the business name
+    const selectors = [
+      'h2[data-attrid="title"]',
+      'h2.qrShPb',
+      'h3[data-attrid="title"]',
+      '[data-attrid="title"] h2',
+      '[data-attrid="title"] h3'
+    ];
+
+    for (const selector of selectors) {
+      const element = panel.querySelector(selector);
+      if (element && element.textContent.trim()) {
+        return element.textContent.trim();
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Extracts address from the knowledge panel
+   */
+  function extractAddress(panel) {
+    // Try multiple selectors for the address
+    const selectors = [
+      '[data-attrid*="address"]',
+      '[data-attrid*="kc:/location/location:address"]',
+      'span[class*="LrzXr"]',
+      '.LrzXr'
+    ];
+
+    for (const selector of selectors) {
+      const element = panel.querySelector(selector);
+      if (element) {
+        const text = element.textContent.trim();
+        // Check if it looks like an address (contains numbers and commas)
+        if (text && /\d/.test(text) && text.includes(',')) {
+          return text;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Creates a Google Maps link
    */
   function createMapsLink(query) {
@@ -26,21 +75,25 @@
   /**
    * Creates the link element
    */
-  function createLinkElement(mapsUrl) {
+  function createLinkElement(mapsUrl, variant = 'default') {
     const linkContainer = document.createElement('div');
-    linkContainer.className = 'gmaps-link-container';
+    linkContainer.className = variant === 'knowledge-panel' ? 'gmaps-link-container gmaps-link-kp' : 'gmaps-link-container';
 
     const link = document.createElement('a');
     link.href = mapsUrl;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.className = 'gmaps-link';
+
+    // Use shorter text for knowledge panel
+    const buttonText = variant === 'knowledge-panel' ? 'Open in Maps' : 'Open in Google Maps';
+
     link.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
         <circle cx="12" cy="10" r="3"></circle>
       </svg>
-      Open in Google Maps
+      ${buttonText}
     `;
 
     linkContainer.appendChild(link);
@@ -106,6 +159,78 @@
   }
 
   /**
+   * Adds Google Maps link to knowledge panel (right-side business panel)
+   */
+  function addKnowledgePanelLink(panel) {
+    // Check if a link already exists
+    if (panel.hasAttribute('data-gmaps-kp-link-added') || panel.querySelector('.gmaps-link-container')) {
+      console.log('Knowledge panel link already added');
+      return;
+    }
+
+    // Extract business name and address
+    const businessName = extractBusinessName(panel);
+    const address = extractAddress(panel);
+
+    // Try to create a more specific query
+    let query = getSearchQuery();
+
+    // If we have business name and address, use them for a more accurate Maps search
+    if (businessName && address) {
+      query = `${businessName}, ${address}`;
+      console.log('Using specific query for knowledge panel:', query);
+    } else if (businessName) {
+      query = businessName;
+      console.log('Using business name for knowledge panel:', query);
+    }
+
+    if (!query) {
+      console.log('No query available for knowledge panel');
+      return;
+    }
+
+    const mapsUrl = createMapsLink(query);
+    const linkElement = createLinkElement(mapsUrl, 'knowledge-panel');
+
+    // Find the best insertion point - look for the action buttons container
+    // Try multiple selectors for the buttons container
+    let insertionPoint = null;
+
+    // Look for the container with action buttons (Website, Route, etc.)
+    const selectors = [
+      '[data-attrid="kc:/ugc:gmap_actions"]',
+      '.wDYxhc.NFQFxe[data-md]',
+      '.OOijTb',
+      '.zloOqf'
+    ];
+
+    for (const selector of selectors) {
+      const container = panel.querySelector(selector);
+      if (container) {
+        insertionPoint = container;
+        break;
+      }
+    }
+
+    if (insertionPoint) {
+      // Insert at the end of the action buttons container
+      insertionPoint.appendChild(linkElement);
+    } else {
+      // Fallback: try to find a generic content container
+      const contentArea = panel.querySelector('.kp-header, .osrp-blk');
+      if (contentArea) {
+        contentArea.appendChild(linkElement);
+      } else {
+        // Last resort: append to panel
+        panel.appendChild(linkElement);
+      }
+    }
+
+    panel.setAttribute('data-gmaps-kp-link-added', 'true');
+    console.log('Knowledge panel Maps link added for:', query);
+  }
+
+  /**
    * Checks if a container is a real geographic map (not stock charts, etc.)
    */
   function isGeographicMap(container) {
@@ -149,6 +274,50 @@
 
     // If at least one positive indicator matches, it's probably a real map
     return geoIndicators.some(check => check());
+  }
+
+  /**
+   * Searches for knowledge panels (right-side business panels)
+   */
+  function findKnowledgePanels() {
+    const foundPanels = [];
+
+    // Knowledge panel selectors - these are the right-side panels that show business info
+    const selectors = [
+      // Main knowledge panel container
+      '#rhs',
+      // Knowledge panel with location/business info
+      '[data-attrid="kc:/location"]',
+      // Alternative knowledge panel selector
+      '.kp-wholepage',
+      // Business panel
+      '[data-attrid*="kc:/business"]'
+    ];
+
+    selectors.forEach(selector => {
+      try {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(el => {
+          // Check if this panel has a map or business information
+          const hasMap = el.querySelector('[data-attrid*="map"]') || el.querySelector('img[src*="staticmap"]');
+          const hasAddress = el.querySelector('[data-attrid*="address"]');
+          const hasBusinessInfo = el.querySelector('[data-attrid="title"]');
+
+          if (hasMap || (hasAddress && hasBusinessInfo)) {
+            // Check if it's visible
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 100 && rect.height > 100) {
+              console.log('DEBUG: Found knowledge panel with business info');
+              foundPanels.push(el);
+            }
+          }
+        });
+      } catch (e) {
+        console.log(`DEBUG: Error with selector "${selector}":`, e);
+      }
+    });
+
+    return foundPanels;
   }
 
   /**
@@ -226,6 +395,18 @@
       });
     } else {
       console.log('No map containers found');
+    }
+
+    // Also process knowledge panels (right-side business panels)
+    const knowledgePanels = findKnowledgePanels();
+
+    if (knowledgePanels.length > 0) {
+      console.log(`${knowledgePanels.length} knowledge panel(s) found`);
+      knowledgePanels.forEach(panel => {
+        addKnowledgePanelLink(panel);
+      });
+    } else {
+      console.log('No knowledge panels found');
     }
   }
 
