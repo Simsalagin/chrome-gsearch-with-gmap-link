@@ -1,0 +1,19 @@
+{
+  "name": "maps-button-for-google-search",
+  "version": "1.1.0",
+  "description": "Adds a convenient button to open locations directly in Google Maps from Google Search results and business panels",
+  "scripts": {
+    "build": "./build.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Simsalagin/chrome-gsearch-with-gmap-link.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "google-maps",
+    "google-search"
+  ],
+  "author": "",
+  "license": "MIT"
+}
