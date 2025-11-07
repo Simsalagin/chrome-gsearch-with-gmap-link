@@ -192,39 +192,10 @@
     const mapsUrl = createMapsLink(query);
     const linkElement = createLinkElement(mapsUrl, 'knowledge-panel');
 
-    // Find the best insertion point - look for the action buttons container
-    // Try multiple selectors for the buttons container
-    let insertionPoint = null;
-
-    // Look for the container with action buttons (Website, Route, etc.)
-    const selectors = [
-      '[data-attrid="kc:/ugc:gmap_actions"]',
-      '.wDYxhc.NFQFxe[data-md]',
-      '.OOijTb',
-      '.zloOqf'
-    ];
-
-    for (const selector of selectors) {
-      const container = panel.querySelector(selector);
-      if (container) {
-        insertionPoint = container;
-        break;
-      }
-    }
-
-    if (insertionPoint) {
-      // Insert at the end of the action buttons container
-      insertionPoint.appendChild(linkElement);
-    } else {
-      // Fallback: try to find a generic content container
-      const contentArea = panel.querySelector('.kp-header, .osrp-blk');
-      if (contentArea) {
-        contentArea.appendChild(linkElement);
-      } else {
-        // Last resort: append to panel
-        panel.appendChild(linkElement);
-      }
-    }
+    // Simple and reliable: Insert at the very top of the panel
+    console.log('Inserting Maps button at top of knowledge panel');
+    panel.insertBefore(linkElement, panel.firstChild);
+    console.log('Maps button inserted successfully');
 
     panel.setAttribute('data-gmaps-kp-link-added', 'true');
     console.log('Knowledge panel Maps link added for:', query);
@@ -277,38 +248,63 @@
   }
 
   /**
-   * Searches for knowledge panels (right-side business panels)
+   * Searches for knowledge panels (right-side business/location panels)
    */
   function findKnowledgePanels() {
-    const foundPanels = [];
+    const foundPanels = new Set();
 
-    // Knowledge panel selectors - these are the right-side panels that show business info
+    // Knowledge panel selectors - these are the right-side panels that show business/location info
     const selectors = [
-      // Main knowledge panel container
-      '#rhs',
-      // Knowledge panel with location/business info
+      // Knowledge panel with location/business info (most specific first)
       '[data-attrid="kc:/location"]',
+      // Business panel
+      '[data-attrid*="kc:/business"]',
       // Alternative knowledge panel selector
       '.kp-wholepage',
-      // Business panel
-      '[data-attrid*="kc:/business"]'
+      // Location-specific panel
+      '.knowledge-panel',
+      // Main knowledge panel container (right side) - less specific
+      '#rhs'
     ];
 
     selectors.forEach(selector => {
       try {
         const elements = document.querySelectorAll(selector);
         elements.forEach(el => {
-          // Check if this panel has a map or business information
+          // Check if this panel has a map or business/location information
           const hasMap = el.querySelector('[data-attrid*="map"]') || el.querySelector('img[src*="staticmap"]');
           const hasAddress = el.querySelector('[data-attrid*="address"]');
-          const hasBusinessInfo = el.querySelector('[data-attrid="title"]');
+          const hasBusinessInfo = el.querySelector('[data-attrid="title"]') || el.querySelector('h2[data-attrid="title"]');
+          const hasLocationInfo = el.querySelector('[data-attrid*="kc:/location"]');
 
-          if (hasMap || (hasAddress && hasBusinessInfo)) {
+          // Must be in the right sidebar (#rhs) or be a knowledge panel structure
+          const isInRightSidebar = el.id === 'rhs' || el.closest('#rhs');
+
+          if (isInRightSidebar && (hasMap || hasLocationInfo || (hasAddress && hasBusinessInfo))) {
             // Check if it's visible
             const rect = el.getBoundingClientRect();
             if (rect.width > 100 && rect.height > 100) {
-              console.log('DEBUG: Found knowledge panel with business info');
-              foundPanels.push(el);
+              // Check if we already have this element or a child of this element
+              let isDuplicate = false;
+              for (const existingPanel of foundPanels) {
+                // If the new element contains an existing one, or an existing one contains the new element, skip
+                if (existingPanel.contains(el) || el.contains(existingPanel)) {
+                  isDuplicate = true;
+                  // Keep the more specific one (smaller one)
+                  if (existingPanel.contains(el)) {
+                    // The new one is more specific, replace
+                    foundPanels.delete(existingPanel);
+                    foundPanels.add(el);
+                    console.log('DEBUG: Replaced panel with more specific one');
+                  }
+                  break;
+                }
+              }
+
+              if (!isDuplicate) {
+                console.log('DEBUG: Found knowledge panel with location/business info');
+                foundPanels.add(el);
+              }
             }
           }
         });
@@ -317,7 +313,7 @@
       }
     });
 
-    return foundPanels;
+    return Array.from(foundPanels);
   }
 
   /**
