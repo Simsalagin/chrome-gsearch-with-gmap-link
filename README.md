@@ -69,6 +69,19 @@ The extension will be available on the Chrome Web Store soon.
 - Check the Console tab for log messages
 - The extension logs when it activates and detects maps
 
+### Building for Chrome Web Store
+
+To package the extension for Chrome Web Store submission:
+
+```bash
+npm run build
+```
+
+This will create `maps-button-for-google-search.zip` ready for upload. The build script automatically:
+- Packages only necessary files (manifest, scripts, styles, icons)
+- Excludes development files and artifacts
+- Creates a properly formatted ZIP file
+
 ## Privacy
 
 This extension:
